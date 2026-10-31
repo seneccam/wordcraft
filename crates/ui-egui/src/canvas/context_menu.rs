@@ -3,6 +3,12 @@ use super::{Ui, WordApp, json};
 /// The spelling suggestions and synonyms the context menu offers for the selection or the word
 /// at the caret.
 pub(super) fn context_suggestions(app: &mut WordApp) {
+    // A read-only document offers no corrections (Exannio locks documents it shows read-only).
+    if app.session.doc.settings.protection.as_deref() == Some("readOnly") {
+        app.canvas.context_issue = None;
+        app.canvas.context_synonyms = None;
+        return;
+    }
     app.canvas.context_issue = app.session.run("review.suggestions", &json!({})).ok().filter(|v| !v.is_null());
     app.canvas.context_synonyms = app.session.run("review.thesaurus", &json!({})).ok().and_then(|v| v.get("synonyms").cloned());
 }

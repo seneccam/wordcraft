@@ -80,6 +80,7 @@ impl WordApp {
             alt_modifier_seen,
         } = window_ui::WindowUi::new(session.document_id());
         WordApp {
+            embedded: false,
             session,
             ui: UiState {
                 tab,
@@ -278,7 +279,7 @@ impl WordApp {
             self.ui.interface_size = theme::migrate_legacy_interface_size(old, native);
         }
         let zoom = self.ui.interface_size.zoom_factor(self.native_scale);
-        if ctx.zoom_factor() != zoom {
+        if !self.embedded && ctx.zoom_factor() != zoom {
             ctx.set_zoom_factor(zoom);
         }
         // Animation effects: the host is asked every frame what the system says (it answers from

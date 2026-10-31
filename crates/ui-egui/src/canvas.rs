@@ -326,6 +326,18 @@ impl CanvasState {
         crate::objects::dragged_off_page(self.obj_drag.as_ref())
     }
 
+    /// Embedding hosts own vertical scrolling: scroll the canvas to `y` points.
+    pub fn host_scroll(&mut self, y: f32) {
+        if y.is_finite() {
+            self.scroll_request = Some(vec2(self.scroll_offset.x, y.max(0.0)));
+        }
+    }
+
+    /// The canvas's vertical scroll position, for the host's own scrollbar.
+    pub fn host_scroll_y(&self) -> f32 {
+        self.scroll_offset.y
+    }
+
     /// How many pages have a cached rendering.
     #[cfg(test)]
     pub(crate) fn texture_count(&self) -> usize {
@@ -681,7 +693,7 @@ fn configure_scroll_area(app: &mut WordApp, ui: &Ui, view: &CanvasView, motion: 
         // Bringing the caret into view glides there, or jumps with animation effects off.
         .animated(view.animate)
         .scroll_source(egui::scroll_area::ScrollSource { mouse_wheel: false, ..Default::default() });
-    if app.session.view.read_mode {
+    if app.embedded || app.session.view.read_mode {
         scroll_area = scroll_area.scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden);
     }
     if delta != egui::Vec2::ZERO || app.canvas.scroll_request.is_some() || app.session.view.read_mode {
@@ -939,7 +951,15 @@ fn paint_pages(pass: PagePaint<'_>) -> PagePaintOutput {
         let painter =
             if band_top <= 0.0 && band_bot >= sr.height() { painter.clone() } else { painter.with_clip_rect(painter.clip_rect().intersect(band)) };
         // Shadow and paper.
-        painter.rect_filled(visual_sr.translate(vec2(0.0, 2.0)).expand(1.5), 1.0, t.page_shadow);
+        if app.embedded {
+            // A soft two-layer shadow that matches the host's cards.
+            let ambient = egui::epaint::Shadow { offset: [0, 3], blur: 20, spread: 0, color: Color32::from_black_alpha(20) };
+            let contact = egui::epaint::Shadow { offset: [0, 1], blur: 4, spread: 0, color: Color32::from_black_alpha(10) };
+            painter.add(ambient.as_shape(visual_sr, 0.0));
+            painter.add(contact.as_shape(visual_sr, 0.0));
+        } else {
+            painter.rect_filled(visual_sr.translate(vec2(0.0, 2.0)).expand(1.5), 1.0, t.page_shadow);
+        }
         let paper = if dark_page {
             Color32::from_gray(wordcraft_render::DARK_PAPER)
         } else if sepia_page {

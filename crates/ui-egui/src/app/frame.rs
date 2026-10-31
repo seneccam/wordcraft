@@ -50,7 +50,7 @@ impl WordApp {
         let moved = |app: &WordApp| app.windows.shown() != window;
         if self.ui.backstage {
             backstage::show(self, ui);
-        } else if !self.has_document() {
+        } else if !self.embedded && !self.has_document() {
             // No document open (#1129): the ribbon greyed out but for Help, and no page.
             chrome::title_bar(self, ui);
             ribbon::show(self, ui);
@@ -60,7 +60,9 @@ impl WordApp {
             let screen = chrome::Screen::of(&self.session.view);
             // Focus and Full Screen (#1678) take the whole screen, with only their slim bar.
             self.focus_ribbon &= screen == chrome::Screen::Focus;
-            if screen != chrome::Screen::Normal {
+            if self.embedded {
+                // The host draws its own ribbon, title and status bars around the canvas.
+            } else if screen != chrome::Screen::Normal {
                 chrome::screen_bar(self, ui, screen);
             } else {
                 chrome::title_bar(self, ui);
@@ -77,11 +79,17 @@ impl WordApp {
             if moved(self) {
                 return;
             }
-            let fill = if screen == chrome::Screen::Focus { chrome::FOCUS_CANVAS } else { t.canvas };
+            let fill = if self.embedded {
+                EMBEDDED_CANVAS
+            } else if screen == chrome::Screen::Focus {
+                chrome::FOCUS_CANVAS
+            } else {
+                t.canvas
+            };
             egui::CentralPanel::default().frame(egui::Frame::NONE.fill(fill)).show(ui, |ui| {
                 canvas::show(self, ui);
             });
-            if self.focus_ribbon && !moved(self) {
+            if !self.embedded && self.focus_ribbon && !moved(self) {
                 chrome::focus_ribbon(self, ctx);
             }
         }
@@ -133,3 +141,6 @@ impl WordApp {
         self.report_dirty();
     }
 }
+
+/// Canvas behind the pages when embedded: Exannio's neutral workspace grey-green.
+const EMBEDDED_CANVAS: egui::Color32 = egui::Color32::from_rgb(0xE9, 0xEE, 0xEA);

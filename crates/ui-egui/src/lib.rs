@@ -463,6 +463,9 @@ fn migrate_units(v: &mut Value) {
 
 /// The application.
 pub struct WordApp {
+    /// Set by embedding hosts (Exannio) that supply their own ribbon, title bar and save UI:
+    /// the window shows only the page canvas, and the host owns the zoom factor.
+    pub embedded: bool,
     pub session: Session,
     pub ui: UiState,
     pub services: Services,

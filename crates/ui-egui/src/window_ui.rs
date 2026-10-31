@@ -154,6 +154,7 @@ impl WordApp {
     pub(crate) fn swap_window(&mut self, w: &mut WindowUi) {
         let WordApp {
             // App-wide.
+            embedded: _,
             session: _,
             services: _,
             printing: _,
