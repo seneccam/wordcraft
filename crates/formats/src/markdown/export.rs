@@ -125,7 +125,8 @@ fn inlines_md_impl(inlines: &[Inline], in_table: bool) -> String {
                 }
             }
             Inline::Image(img) => {
-                let name = format!("image.{}", img.ext);
+                // Hosts store the Markdown body on its own, so images travel inside it.
+                let name = format!("data:{};base64,{}", crate::model::mime_of(&img.ext), crate::model::base64_encode(&img.data));
                 pieces.push((String::new(), Fmt::default(), Some(format!("![{}]({})", escape(&img.alt), name))));
             }
             Inline::Anchor(a) => {
