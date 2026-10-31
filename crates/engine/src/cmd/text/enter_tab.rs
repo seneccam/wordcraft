@@ -168,8 +168,27 @@ fn enter(s: &mut Session, undo_step: bool) -> Result<(), CmdError> {
         at = s.sel.focus.clone();
     }
     let new = split_para(s, &at)?;
+    uncheck_new_checklist_item(s, &new)?;
     s.sel = Selection::caret(new);
     s.goal_x = None;
+    Ok(())
+}
+
+/// Exannio: Enter on a checked checklist item (☑) starts the next item unchecked (☐), in the
+/// same undo step as the Enter.
+fn uncheck_new_checklist_item(s: &mut Session, new: &Pos) -> Result<(), CmdError> {
+    let Some(n) = s.doc.para_at(new).and_then(|p| p.props.numbering).filter(|n| n.num != 0) else { return Ok(()) };
+    if !s.doc.numbering.level(n.num, n.level).is_some_and(|l| l.text.trim() == "☑") {
+        return Ok(());
+    }
+    let kind = wordcraft_doc::numbering::ListKind::BulletChar('☐');
+    let num = match s.doc.numbering.find_kind(kind) {
+        Some(num) => num,
+        None => s.doc.numbering.try_add_list(kind)?,
+    };
+    let para = s.doc.para_mut(new.story, &new.path)?;
+    para.props.numbering = Some(NumRef { num, level: n.level });
+    para.touch();
     Ok(())
 }
 
@@ -292,4 +311,25 @@ pub(super) fn back_tab(s: &mut Session, _: &Value) -> CmdResult {
         return sel_result(s);
     }
     crate::cmd::para::outdent(s, &Value::Null)
+}
+
+#[cfg(test)]
+mod exannio_checklists {
+    use super::*;
+
+    #[test]
+    fn enter_on_a_checked_item_starts_unchecked_and_undoes_in_one_step() {
+        let mut s = Session::new(wordcraft_doc::Document::new());
+        s.run("document.setText", &serde_json::json!({"text": "Task"})).unwrap();
+        s.run("para.bullets", &serde_json::json!({"kind": "☑"})).unwrap();
+        s.sel = Selection::caret(Pos::body(0, 4));
+        s.run("text.newParagraph", &serde_json::json!({})).unwrap();
+        let num = s.doc.para_at(&s.sel.focus).unwrap().props.numbering.unwrap();
+        assert_eq!(s.doc.numbering.level(num.num, num.level).unwrap().text.trim(), "☐");
+        assert_eq!(s.doc.body.len(), 2);
+        s.run("edit.undo", &serde_json::json!({})).unwrap();
+        assert_eq!(s.doc.body.len(), 1);
+        let num = s.doc.para_at(&Pos::body(0, 0)).unwrap().props.numbering.unwrap();
+        assert_eq!(s.doc.numbering.level(num.num, num.level).unwrap().text.trim(), "☑");
+    }
 }
