@@ -340,10 +340,12 @@ const COMMON: &str = "a an the and or but if of to in on at by for with from as 
 /// Our supplement of common words the Moby list lacks (`desktop`, `email`, `download`…): one
 /// lowercase base form per line, `#` comments. Inflections come from [`known_core`].
 const EXTRA_EN: &str = include_str!("../../../assets/spelling/en-extra.txt");
+/// Host-bundled spelling words (Exannio): supplement the dictionary without changing hyphenation.
+const EXTRA_HOST_EN: &str = include_str!("../../../assets/spelling/en-exannio.txt");
 
 fn extra_words() -> &'static HashSet<&'static str> {
     static E: OnceLock<HashSet<&str>> = OnceLock::new();
-    E.get_or_init(|| EXTRA_EN.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).collect())
+    E.get_or_init(|| EXTRA_EN.lines().chain(EXTRA_HOST_EN.lines()).map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).collect())
 }
 
 /// A base form in the dictionary or the supplement.
@@ -539,6 +541,7 @@ pub fn suggest(word: &str, max: usize) -> Vec<String> {
         }
     }
     scored.sort_by(|a, b| (a.0, a.1, a.2.len().abs_diff(n)).cmp(&(b.0, b.1, b.2.len().abs_diff(n))).then(a.2.cmp(&b.2)));
+    scored.dedup_by(|a, b| a.2 == b.2);
     scored.into_iter().take(max).map(|(_, _, w)| match_case(word, w)).collect()
 }
 
@@ -1167,6 +1170,20 @@ mod tests {
     }
 
     #[test]
+    fn host_english_spelling() {
+        for word in ["upcoming", "Upcoming", "functionality", "functionalities", "organizational", "compatibility"] {
+            assert!(is_correct(word), "{word}");
+        }
+        for word in ["upcomming", "functonality", "mispelled", "recieve", "helo"] {
+            assert!(!is_correct(word), "{word}");
+        }
+        assert!(check_spelling("Our upcoming services share common functionality.").is_empty());
+        assert!(suggest("upcomming", 5).contains(&"upcoming".to_string()));
+        let suggestions = suggest("recieve", 5);
+        assert_eq!(suggestions.len(), suggestions.iter().collect::<HashSet<_>>().len(), "no duplicate suggestions");
+    }
+
+    #[test]
     fn spelling() {
         for w in [
             "if",
@@ -1767,7 +1784,8 @@ mod tests {
         let bad = |o: Options| check_spelling_with(t, &o).iter().map(|i| t[i.start..i.end].to_string()).collect::<Vec<_>>();
         assert!(bad(Options::default()).is_empty(), "Word's defaults skip all three");
         let all = Options { ignore_uppercase: false, ignore_numbers: false, ignore_internet: false };
-        assert_eq!(bad(all), ["SENTENSE", "helo2", "www", "exampel"]);
+        // "www" is in the host word list (en-exannio.txt), so only the misspelled parts remain.
+        assert_eq!(bad(all), ["SENTENSE", "helo2", "exampel"]);
         assert_eq!(bad(Options { ignore_uppercase: false, ..Options::default() }), ["SENTENSE"]);
         assert!(is_correct_with("NASA", &all), "capitals that are a word stay correct");
     }
